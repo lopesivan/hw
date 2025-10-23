@@ -274,8 +274,13 @@ static void print_help(const char* prog, const Config& cfg)
            "python)\n"
         << "      --list          Lista linguagens disponíveis\n"
         << "      --out <file>    Salva a saída em arquivo\n"
-        << "  -c                  Atalho para C (alias embutido)\n"
-        << "      --cpp           Atalho para C++ (alias embutido)\n"
+        << "\nAtalhos:\n"
+        << "  -c                  Atalho embutido para C\n"
+        << "      --cpp           Atalho embutido para C++\n"
+        << "  -<alias>            Alias curto de várias letras, ex.: "
+           "-py, -pl, -rs\n"
+        << "  --<alias>           Alias longo, ex.: --python, "
+           "--perl\n"
         << "\nAliases do config.ini ([aliases]):\n";
     if (cfg.aliases.empty())
     {
@@ -285,10 +290,8 @@ static void print_help(const char* prog, const Config& cfg)
     {
         for (auto& kv : cfg.aliases)
         {
-            std::cout << "  --" << kv.first;
-            if (kv.first.size() == 1)
-                std::cout << "  (ou -" << kv.first << ")";
-            std::cout << "  -> " << kv.second << "\n";
+            std::cout << "  " << kv.first << " -> " << kv.second
+                      << "\n";
         }
     }
     std::cout
@@ -307,6 +310,7 @@ static void print_help(const char* prog, const Config& cfg)
 #endif
 }
 
+/*
 static Args parse_args(int argc, char** argv, const Config& cfg)
 {
     Args a;
@@ -375,7 +379,96 @@ static Args parse_args(int argc, char** argv, const Config& cfg)
     }
     return a;
 }
+*/
+static Args parse_args(int argc, char** argv, const Config& cfg)
+{
+    Args a;
 
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string tok = argv[i];
+
+        if (tok == "-h" || tok == "--help")
+        {
+            print_help(argv[0], cfg);
+            std::exit(0);
+        }
+        else if (tok == "--list")
+        {
+            a.show_list = true;
+        }
+        else if (tok == "-l" || tok == "--lang")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "[hw] Faltou argumento para " << tok
+                          << "\n";
+                std::exit(1);
+            }
+            a.lang = argv[++i];
+        }
+        else if (tok == "--out")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "[hw] Faltou argumento para --out\n";
+                std::exit(1);
+            }
+            a.out_path = argv[++i];
+        }
+        // ---- aliases embutidos (compat) ----
+        else if (tok == "-c")
+        {
+            a.alias_hit = "c";  // atalho embutido
+        }
+        else if (tok == "--cpp")
+        {
+            a.alias_hit = "cpp";  // atalho embutido
+        }
+        // ---- aliases do config: forma longa --<alias> ----
+        else if (starts_with(tok, "--") && tok.size() > 2)
+        {
+            std::string name = tok.substr(2);  // tudo após --
+            auto it = cfg.aliases.find(name);
+            if (it != cfg.aliases.end())
+            {
+                a.alias_hit = it->second;
+            }
+            else
+            {
+                // desconhecido: ignore silenciosamente (ou emita
+                // aviso se preferir)
+            }
+        }
+        // ---- aliases do config: forma curta multi-letras -<alias>
+        // ---- Nota: aqui consideramos o token inteiro após o hífen
+        // como o alias textual. Exemplos: -py -> "py", -pl -> "pl",
+        // -rs -> "rs".
+        else if (starts_with(tok, "-") && tok.size() > 1 &&
+                 tok[1] != '-')
+        {
+            std::string name = tok.substr(1);  // tudo após o 1º '-'
+            // Caso especial: se for apenas "l", não tratamos aqui
+            // (pois -l já foi pego acima).
+            if (name != "l")
+            {
+                auto it = cfg.aliases.find(name);
+                if (it != cfg.aliases.end())
+                {
+                    a.alias_hit = it->second;
+                }
+                else
+                {
+                    // Se quiser, trate combinações POSIX (-abc) aqui,
+                    // mas neste app adotamos a convenção: '-<alias
+                    // textual>' inteiro (sem combinações).
+                }
+            }
+        }
+        // argumentos posicionais: ignorar
+    }
+    return a;
+}
 // -------------------- main --------------------
 int main(int argc, char** argv)
 {
